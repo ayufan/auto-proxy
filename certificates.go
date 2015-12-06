@@ -51,6 +51,7 @@ func (c *Certificates) load(name string, challenge CertificateChallenge) (tls *t
 
 	// Load the certificate
 	err = certificate.Load()
+	tls = certificate.TLS
 	if !os.IsNotExist(err) {
 		if err != nil {
 			logrus.Warningln(err)
@@ -72,7 +73,7 @@ func (c *Certificates) load(name string, challenge CertificateChallenge) (tls *t
 		}
 	}()
 
-	return certificate.TLS, nil
+	return
 }
 
 func (c Certificates) find(serverName string) *tls.Certificate {
