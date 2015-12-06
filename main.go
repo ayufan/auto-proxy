@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"path"
 	"sync"
@@ -64,18 +65,22 @@ func (a *theApp) serveWellKnown(w http.ResponseWriter, r *http.Request) bool {
 	defer a.lock.RUnlock()
 
 	if wellKnown, ok := a.wellKnown[r.RequestURI]; ok {
-		written, _ := io.WriteString(w, wellKnown)
-		httpLog(200, int64(written), r, time.Now())
+		io.WriteString(w, wellKnown)
 		return true
 	}
 	return false
 }
 
-func (a *theApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (a *theApp) ServeHTTP(ww http.ResponseWriter, r *http.Request) {
+	w := newLoggingResponseWriter(ww)
+	defer w.Log(r)
+
+	// Serve ACME responses
 	if a.serveWellKnown(w, r) {
 		return
 	}
 
+	// Check if we support virtual host
 	route := a.routes.Find(r.Host)
 	if route == nil {
 		httpServerError(w, r, "no route for", r.Host)
@@ -90,10 +95,10 @@ func (a *theApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		u.User = nil
 
 		http.Redirect(w, r, u.String(), 307)
-		httpLog(307, 0, r, time.Now())
 		return
 	}
 
+	// Check if we have servers that we can use
 	if len(route.Servers) == 0 {
 		httpServerError(w, r, "no upstreams for", r.Host)
 		return
@@ -104,8 +109,32 @@ func (a *theApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Strict-Transport-Security", route.HSTS)
 	}
 
-	// Proxy request
-	httpProxyRequest(route.Servers[0], w, r)
+	// Update URL
+	upstream := route.Servers[0]
+	if upstream.Proto != "" {
+		r.URL.Scheme = upstream.Proto
+	} else {
+		r.URL.Scheme = "http"
+	}
+	r.URL.Host = upstream.Host()
+
+	// Pass X-Forwaded information to client
+	if clientIP, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		r.Header.Set("X-Real-IP", clientIP)
+	}
+
+	if r.TLS == nil {
+		r.Header.Set("X-Forwarded-Proto", "http")
+	} else {
+		r.Header.Set("X-Forwarded-Proto", "https")
+	}
+
+	proxy := httputil.ReverseProxy{
+		Director:      func(_ *http.Request) {},
+		Transport:     &defaultTransport,
+		FlushInterval: time.Minute,
+	}
+	proxy.ServeHTTP(w, r)
 }
 
 func (a *theApp) AddCertificate(name string, certificate *tls.Certificate) {
@@ -152,7 +181,6 @@ func main() {
 	os.MkdirAll(path.Dir(*defaultCert), 0700)
 	os.MkdirAll(path.Dir(*defaultKey), 0700)
 
-	// Create default transport
 	defaultTransport = http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		Dial: (&net.Dialer{

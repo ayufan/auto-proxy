@@ -2,70 +2,55 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 )
 
 var defaultTransport http.Transport
 
-func httpLog(statusCode int, written int64, r *http.Request, started time.Time) {
+type loggingResponseWriter struct {
+	rw      http.ResponseWriter
+	status  int
+	written int64
+	started time.Time
+}
+
+func newLoggingResponseWriter(rw http.ResponseWriter) *loggingResponseWriter {
+	return &loggingResponseWriter{
+		rw:      rw,
+		started: time.Now(),
+	}
+}
+
+func (l *loggingResponseWriter) Header() http.Header {
+	return l.rw.Header()
+}
+
+func (l *loggingResponseWriter) Write(data []byte) (n int, err error) {
+	if l.status == 0 {
+		l.status = http.StatusOK
+	}
+	n, err = l.rw.Write(data)
+	l.written += int64(n)
+	return
+}
+
+func (l *loggingResponseWriter) WriteHeader(status int) {
+	l.rw.WriteHeader(status)
+	if l.status == 0 {
+		l.status = status
+	}
+}
+
+func (l *loggingResponseWriter) Log(r *http.Request) {
 	fmt.Printf("%s %s - - [%s] %q %d %d %q %q\n",
-		r.Host, r.RemoteAddr, started,
+		r.Host, r.RemoteAddr, l.started,
 		fmt.Sprintf("%s %s %s", r.Method, r.RequestURI, r.Proto),
-		statusCode, written, r.Referer(), r.UserAgent(),
+		l.status, l.written, r.Referer(), r.UserAgent(),
 	)
 }
 
 func httpServerError(w http.ResponseWriter, r *http.Request, a ...interface{}) {
 	w.WriteHeader(503)
-	written, _ := fmt.Fprintln(w, a...)
-	httpLog(503, int64(written), r, time.Now())
-}
-
-func httpProxyRequest(upstream Upstream, w http.ResponseWriter, r *http.Request) {
-	u := *r.URL
-	started := time.Now()
-
-	if upstream.Proto != "" {
-		u.Scheme = upstream.Proto
-	} else {
-		u.Scheme = "http"
-	}
-	u.Host = upstream.Host()
-
-	req := http.Request{
-		Method:        r.Method,
-		URL:           &u,
-		Proto:         "HTTP/1.1",
-		ProtoMajor:    1,
-		ProtoMinor:    1,
-		Header:        r.Header,
-		Body:          r.Body,
-		ContentLength: r.ContentLength,
-		Host:          r.Host,
-	}
-
-	// Add headers
-	req.Header.Set("X-Real-IP", r.RemoteAddr)
-	req.Header.Add("X-Forwarded-For", r.RemoteAddr)
-	if r.TLS == nil {
-		req.Header.Set("X-Forwarded-Proto", "http")
-	} else {
-		req.Header.Set("X-Forwarded-Proto", "https")
-	}
-
-	res, err := defaultTransport.RoundTrip(&req)
-	if err != nil {
-		httpServerError(w, r, "Failed to execute request to:", u.String(), "with:", err)
-		return
-	}
-
-	defer res.Body.Close()
-	for k, v := range res.Header {
-		w.Header()[k] = v
-	}
-	w.WriteHeader(res.StatusCode)
-	written, _ := io.Copy(w, res.Body)
-	httpLog(res.StatusCode, written, r, started)
+	fmt.Fprintln(w, a...)
 }
