@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+var defaultTransport http.Transport
+
 func httpLog(statusCode int, written int64, r *http.Request, started time.Time) {
 	fmt.Printf("%s %s - - [%s] %q %d %d %q %q\n",
 		r.Host, r.RemoteAddr, started,
@@ -31,9 +33,10 @@ func httpProxyRequest(upstream Upstream, w http.ResponseWriter, r *http.Request)
 
 	started := time.Now()
 
-	u.Scheme = "http"
 	if upstream.Proto != "" {
 		u.Scheme = upstream.Proto
+	} else {
+		u.Scheme = "http"
 	}
 	u.Host = upstream.Host()
 
@@ -49,7 +52,16 @@ func httpProxyRequest(upstream Upstream, w http.ResponseWriter, r *http.Request)
 		Host:          r.Host,
 	}
 
-	res, err := http.DefaultTransport.RoundTrip(&req)
+	// Add headers
+	req.Header.Set("X-Real-IP", r.RemoteAddr)
+	req.Header.Add("X-Forwarded-For", r.RemoteAddr)
+	if r.TLS == nil {
+		req.Header.Set("X-Forwarded-Proto", "http")
+	} else {
+		req.Header.Set("X-Forwarded-Proto", "https")
+	}
+
+	res, err := defaultTransport.RoundTrip(&req)
 	if err != nil {
 		httpServerError(w, r, "Failed to execute request to:", u.String(), "with:", err)
 		return

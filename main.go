@@ -5,12 +5,13 @@ import (
 	"flag"
 	"github.com/Sirupsen/logrus"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"sync"
 	"time"
-	"net/url"
 )
 
 var listenHttp = flag.String("listen-http", ":80", "The address to listen for HTTP requests")
@@ -23,6 +24,8 @@ var defaultCert = flag.String("default-crt", "/etc/auto-proxy/default.crt", "The
 var defaultKey = flag.String("default-key", "/etc/auto-proxy/default.key", "The path to default certificate key")
 var useDefaultKey = flag.Bool("use-default-key", true, "All certificates will be generated with the default certificate key")
 var ports = flag.String("ports", "80,8080,3000,5000", "Auto-create mapping for these ports")
+var insecureSkipVerify = flag.Bool("insecure-skip-verify", false, "Disable SSL/TLS checking for proxied requests")
+var http2proto = flag.Bool("http2", true, "Enable HTTP2 support")
 var verbose = flag.Bool("debug", false, "Be more verbose")
 
 type theApp struct {
@@ -80,7 +83,8 @@ func (a *theApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.TLS == nil {
+	// Add auto redirect
+	if r.TLS == nil && !route.EnableHTTP {
 		u, err := url.ParseRequestURI(r.RequestURI)
 		if err != nil {
 			httpServerError(w, r, "Failed to parse:", r.RequestURI, "with:", err)
@@ -98,6 +102,12 @@ func (a *theApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Add HSTS header
+	if r.TLS != nil && !route.EnableHTTP && route.HSTS != "" {
+		w.Header().Set("Strict-Transport-Security", route.HSTS)
+	}
+
+	// Proxy request
 	httpProxyRequest(route.Servers[0], w, r)
 }
 
@@ -130,25 +140,40 @@ func (a *theApp) RemoveHttpUri(uriPath string) {
 }
 
 func main() {
-	flag.Parse()
-
 	var wg sync.WaitGroup
+	var app theApp
+
+	flag.Parse()
 
 	if *verbose {
 		logrus.SetLevel(logrus.DebugLevel)
 	}
 
+	// Create directories
 	os.MkdirAll(*certsDirectory, 0700)
 	os.MkdirAll(path.Dir(*accountKey), 0700)
 	os.MkdirAll(path.Dir(*defaultCert), 0700)
 	os.MkdirAll(path.Dir(*defaultKey), 0700)
 
+	// Create default transport
+	defaultTransport = http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		Dial: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout: 10 * time.Second,
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: *insecureSkipVerify,
+		},
+	}
+
+	// Load or create default certificate
 	defaultCertificate = &Certificate{
 		Name:            "default",
 		CertificateFile: *defaultCert,
 		KeyFile:         *defaultKey,
 	}
-
 	err := defaultCertificate.Load()
 	if os.IsNotExist(err) {
 		err = defaultCertificate.CreateSelfSigned()
@@ -159,14 +184,12 @@ func main() {
 		logrus.Fatalln(err)
 	}
 
-	app := &theApp{}
-
 	// Listen for HTTP
 	if *listenHttp != "" {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := ListenAndServe(*listenHttp, app)
+			err := ListenAndServe(*listenHttp, &app)
 			if err != nil {
 				logrus.Fatalln(err)
 			}
@@ -178,7 +201,7 @@ func main() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := ListenAndServeTLS(*listenHttps, defaultCertificate, app)
+			err := ListenAndServeTLS(*listenHttps, defaultCertificate, &app)
 			if err != nil {
 				logrus.Fatalln(err)
 			}
@@ -194,7 +217,7 @@ func main() {
 	go func() {
 		for {
 			time.Sleep(time.Hour)
-			app.certificates.Tick(app)
+			app.certificates.Tick(&app)
 		}
 	}()
 

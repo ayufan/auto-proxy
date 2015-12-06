@@ -20,6 +20,8 @@ func (u *Upstream) Host() string {
 type RouteBuilder struct {
 	VirtualHost []string
 	Upstream    Upstream
+	EnableHTTP  bool
+	HSTS        string
 }
 
 func NewRouteBuilder() RouteBuilder {
@@ -27,6 +29,8 @@ func NewRouteBuilder() RouteBuilder {
 		Upstream: Upstream{
 			Proto: "http",
 		},
+		EnableHTTP: false,
+		HSTS:       "max-age=31536000",
 	}
 }
 
@@ -48,6 +52,11 @@ func (r *RouteBuilder) parse(env string) bool {
 		r.Upstream.Port = port
 	case "VIRTUAL_PROTO":
 		r.Upstream.Proto = keyValue[1]
+	case "ENABLE_HTTP":
+		flag, _ := strconv.ParseBool(keyValue[1])
+		r.EnableHTTP = flag
+	case "HTTP_HSTS":
+		r.HSTS = keyValue[1]
 	default:
 		return false
 	}
@@ -58,6 +67,8 @@ func (r *RouteBuilder) parse(env string) bool {
 type Route struct {
 	VirtualHost string
 	Wildcard    bool
+	EnableHTTP  bool
+	HSTS        string
 	Servers     []Upstream
 }
 
@@ -71,6 +82,8 @@ func (r *Routes) Add(b RouteBuilder) bool {
 	for _, host := range b.VirtualHost {
 		route := r.GetVhost(host)
 		route.Servers = append(route.Servers, b.Upstream)
+		route.EnableHTTP = b.EnableHTTP
+		route.HSTS = b.HSTS
 	}
 	return true
 }
