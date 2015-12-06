@@ -10,6 +10,7 @@ import (
 	"path"
 	"sync"
 	"time"
+	"net/url"
 )
 
 var listenHttp = flag.String("listen-http", ":80", "The address to listen for HTTP requests")
@@ -76,6 +77,19 @@ func (a *theApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	route := a.routes.Find(r.Host)
 	if route == nil {
 		httpServerError(w, r, "no route for", r.Host)
+		return
+	}
+
+	if r.TLS == nil {
+		u, err := url.ParseRequestURI(r.RequestURI)
+		if err != nil {
+			httpServerError(w, r, "Failed to parse:", r.RequestURI, "with:", err)
+			return
+		}
+		u.Scheme = "https"
+
+		http.Redirect(w, r, u.String(), 307)
+		httpLog(307, 0, r, time.Now())
 		return
 	}
 

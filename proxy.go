@@ -49,7 +49,7 @@ func httpProxyRequest(upstream Upstream, w http.ResponseWriter, r *http.Request)
 		Host:          r.Host,
 	}
 
-	res, err := http.DefaultClient.Do(&req)
+	res, err := http.DefaultTransport.RoundTrip(&req)
 	if err != nil {
 		httpServerError(w, r, "Failed to execute request to:", u.String(), "with:", err)
 		return
