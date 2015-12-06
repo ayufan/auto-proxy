@@ -7,7 +7,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path"
 	"sync"
@@ -85,12 +84,10 @@ func (a *theApp) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Add auto redirect
 	if r.TLS == nil && !route.EnableHTTP {
-		u, err := url.ParseRequestURI(r.RequestURI)
-		if err != nil {
-			httpServerError(w, r, "Failed to parse:", r.RequestURI, "with:", err)
-			return
-		}
+		u := *r.URL
 		u.Scheme = "https"
+		u.Host = r.Host
+		u.User = nil
 
 		http.Redirect(w, r, u.String(), 307)
 		httpLog(307, 0, r, time.Now())

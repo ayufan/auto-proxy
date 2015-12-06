@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"time"
 )
 
@@ -25,12 +24,7 @@ func httpServerError(w http.ResponseWriter, r *http.Request, a ...interface{}) {
 }
 
 func httpProxyRequest(upstream Upstream, w http.ResponseWriter, r *http.Request) {
-	u, err := url.ParseRequestURI(r.RequestURI)
-	if err != nil {
-		httpServerError(w, r, "Failed to parse:", r.RequestURI, "with:", err)
-		return
-	}
-
+	u := *r.URL
 	started := time.Now()
 
 	if upstream.Proto != "" {
@@ -42,7 +36,7 @@ func httpProxyRequest(upstream Upstream, w http.ResponseWriter, r *http.Request)
 
 	req := http.Request{
 		Method:        r.Method,
-		URL:           u,
+		URL:           &u,
 		Proto:         "HTTP/1.1",
 		ProtoMajor:    1,
 		ProtoMinor:    1,
