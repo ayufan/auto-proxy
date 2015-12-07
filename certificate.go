@@ -119,7 +119,7 @@ func (c *Certificate) getX509() (*x509.Certificate, error) {
 
 func (c *Certificate) IsExpiring(duration time.Duration) bool {
 	x509 := c.X509
-	if x509 != nil {
+	if x509 == nil {
 		return false
 	}
 	if x509.NotAfter.Sub(time.Now()) < duration {
