@@ -165,8 +165,13 @@ func (c *Certificate) rebuildChains() error {
 		return err
 	}
 
-	c.TLS.Certificate = make([][]byte, len(chains[0]))
-	for idx, certificate := range chains[0] {
+	// The last certificate of chains is always from RootPool
+	chain := chains[0]
+	chain = chain[0:len(chain)-1]
+
+	// Copy chain
+	c.TLS.Certificate = make([][]byte, len(chain))
+	for idx, certificate := range chain {
 		c.TLS.Certificate[idx] = certificate.Raw
 	}
 	return nil
