@@ -5,6 +5,7 @@ import (
 	"flag"
 	"github.com/Sirupsen/logrus"
 	"io"
+	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -110,7 +111,7 @@ func (a *theApp) ServeHTTP(ww http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update URL
-	upstream := route.Servers[0]
+	upstream := route.Servers[rand.Int()%len(route.Servers)]
 	if upstream.Proto != "" {
 		r.URL.Scheme = upstream.Proto
 	} else {
@@ -135,6 +136,8 @@ func (a *theApp) ServeHTTP(ww http.ResponseWriter, r *http.Request) {
 		FlushInterval: time.Minute,
 	}
 	proxy.ServeHTTP(w, r)
+
+	w.Message = upstream.String()
 }
 
 func (a *theApp) AddCertificate(name string, certificate *tls.Certificate) {

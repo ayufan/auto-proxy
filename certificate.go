@@ -167,7 +167,7 @@ func (c *Certificate) rebuildChains() error {
 
 	// The last certificate of chains is always from RootPool
 	chain := chains[0]
-	chain = chain[0:len(chain)-1]
+	chain = chain[0 : len(chain)-1]
 
 	// Copy chain
 	c.TLS.Certificate = make([][]byte, len(chain))

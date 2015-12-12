@@ -50,6 +50,7 @@ func createRoutes(client *docker.Client) (routes Routes, err error) {
 			route.parse(env)
 		}
 
+		route.Upstream.Container = container.Name
 		route.Upstream.IP = container.NetworkSettings.IPAddress
 
 		// Fill container PORT

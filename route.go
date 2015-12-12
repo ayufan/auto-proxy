@@ -8,13 +8,18 @@ import (
 )
 
 type Upstream struct {
-	IP    string
-	Port  int
-	Proto string
+	Container string
+	IP        string
+	Port      int
+	Proto     string
 }
 
 func (u *Upstream) Host() string {
 	return fmt.Sprintf("%s:%d", u.IP, u.Port)
+}
+
+func (u *Upstream) String() string {
+	return fmt.Sprintf("%s (%s:%d)", u.Container, u.IP, u.Port)
 }
 
 type RouteBuilder struct {

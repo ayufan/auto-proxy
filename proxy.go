@@ -13,6 +13,7 @@ type loggingResponseWriter struct {
 	status  int
 	written int64
 	started time.Time
+	Message string
 }
 
 func newLoggingResponseWriter(rw http.ResponseWriter) *loggingResponseWriter {
@@ -43,10 +44,12 @@ func (l *loggingResponseWriter) WriteHeader(status int) {
 }
 
 func (l *loggingResponseWriter) Log(r *http.Request) {
-	fmt.Printf("%s %s - - [%s] %q %d %d %q %q\n",
+	duration := time.Since(l.started)
+	fmt.Printf("%s %s - - [%s] %q %d %d %q %q %f %q\n",
 		r.Host, r.RemoteAddr, l.started,
 		fmt.Sprintf("%s %s %s", r.Method, r.RequestURI, r.Proto),
 		l.status, l.written, r.Referer(), r.UserAgent(),
+		duration.Seconds(), l.Message,
 	)
 }
 
