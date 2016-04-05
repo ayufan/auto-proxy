@@ -119,7 +119,7 @@ func (a *theApp) ServeHTTP(ww http.ResponseWriter, r *http.Request) {
 	}
 	r.URL.Host = upstream.Host()
 
-	// Pass X-Forwaded information to client
+	// Pass X-Forwarded information to client
 	if clientIP, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
 		r.Header.Set("X-Real-IP", clientIP)
 	}
