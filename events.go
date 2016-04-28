@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/Sirupsen/logrus"
 	"github.com/fsouza/go-dockerclient"
 	"strconv"
@@ -51,15 +52,49 @@ func createRoutes(client *docker.Client) (routes Routes, err error) {
 		}
 
 		route.Upstream.Container = container.Name
-		route.Upstream.IP = container.NetworkSettings.IPAddress
 
-		// Fill container PORT
-		if route.Upstream.Port == 0 {
+		var bindings []docker.PortBinding
+		if route.Upstream.Port != 0 {
+			// Try to find binding when custom port is specified
+			portDef := fmt.Sprintf("%d/tcp", route.Upstream.Port)
+			bindings = container.NetworkSettings.Ports[docker.Port(portDef)]
+		}
+
+		if bindings == nil {
+			// Try to find binding for predefined ports
 			for _, portText := range strings.Split(*ports, ",") {
-				if _, ok := container.NetworkSettings.Ports[docker.Port(portText+"/tcp")]; ok {
-					port, _ := strconv.Atoi(portText)
-					route.Upstream.Port = port
+				portDef := fmt.Sprintf("%s/tcp", portText)
+				bindings = container.NetworkSettings.Ports[docker.Port(portDef)]
+				if len(bindings) > 0 {
+					route.Upstream.Port, _ = strconv.Atoi(portText)
 					break
+				}
+			}
+		}
+
+		// Try to use bindings in order to access host
+		for _, binding := range bindings {
+			if binding.HostIP != "0.0.0.0" {
+				route.Upstream.IP = binding.HostIP
+				route.Upstream.Port, _ = strconv.Atoi(binding.HostPort)
+				break
+			}
+		}
+
+		// If we are not running on Swarm we can use local networking address
+		if container.Node == nil {
+			// Try to use address when connected to local bridge
+			if route.Upstream.IP == "" {
+				route.Upstream.IP = container.NetworkSettings.IPAddress
+			}
+
+			// Try to use address when connected to other network
+			if route.Upstream.IP == "" {
+				for _, network := range container.NetworkSettings.Networks {
+					if network.IPAddress != "" {
+						route.Upstream.IP = network.IPAddress
+						break
+					}
 				}
 			}
 		}
