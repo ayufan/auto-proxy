@@ -161,7 +161,7 @@ func (e *LetsEncrypt) finishChallenge(challenge letsencrypt.Challenge) (err erro
 	return
 }
 
-func (e *LetsEncrypt) createCertificate(csr *x509.CertificateRequest) (*x509.Certificate, error) {
+func (e *LetsEncrypt) createCertificate(csr *x509.CertificateRequest) (*letsencrypt.CertificateResponse, error) {
 	err := e.ensureClient()
 	if err != nil {
 		return nil, err

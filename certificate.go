@@ -316,5 +316,5 @@ func (c *Certificate) Request(certificateChallenge CertificateChallenge) error {
 	}
 
 	c.log().Infoln("Generated a new certificate.")
-	return c.finish(certificate, key)
+	return c.finish(certificate.Certificate, key)
 }
