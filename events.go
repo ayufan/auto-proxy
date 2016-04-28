@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/Sirupsen/logrus"
 	"github.com/fsouza/go-dockerclient"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -47,63 +46,69 @@ func createRoutes(client *docker.Client) (routes Routes, err error) {
 
 	for container := range ch {
 		route := NewRouteBuilder()
-		for _, env := range container.Config.Env {
-			route.parse(env)
-		}
+		route.ParseAll(container.Config.Env...)
 
-		route.Upstream.Container = container.Name
-
-		var bindings []docker.PortBinding
-		if route.Upstream.Port != 0 {
-			// Try to find binding when custom port is specified
-			portDef := fmt.Sprintf("%d/tcp", route.Upstream.Port)
-			bindings = container.NetworkSettings.Ports[docker.Port(portDef)]
-		}
-
-		if bindings == nil {
-			// Try to find binding for predefined ports
-			for _, portText := range strings.Split(*ports, ",") {
-				portDef := fmt.Sprintf("%s/tcp", portText)
-				bindings = container.NetworkSettings.Ports[docker.Port(portDef)]
-				if len(bindings) > 0 {
-					route.Upstream.Port, _ = strconv.Atoi(portText)
+		// Try to find first suitable port if not specified from list of ports
+		if route.Upstream.Port == "" {
+			for _, port := range strings.Split(*ports, ",") {
+				portDef := fmt.Sprintf("%s/tcp", port)
+				if _, ok := container.NetworkSettings.Ports[docker.Port(portDef)]; ok {
+					route.Upstream.Port = port
 					break
 				}
 			}
 		}
 
-		// Try to use bindings in order to access host
+		// Fail if we can't find a port
+		if route.Upstream.Port == "" {
+			logrus.WithField("name", container.Name).WithField("id", container.ID[0:7]).
+				Debugln("Couldn't find a port to expose...")
+			continue
+		}
+
+		route.Upstream.Container = container.Name
+
+		// Try to find bindings for specified ports
+		portDef := fmt.Sprintf("%s/tcp", route.Upstream.Port)
+		bindings := container.NetworkSettings.Ports[docker.Port(portDef)]
+
+		// Try to use bindings in order to access host (useful for Swarm nodes)
 		for _, binding := range bindings {
 			if binding.HostIP != "0.0.0.0" {
 				route.Upstream.IP = binding.HostIP
-				route.Upstream.Port, _ = strconv.Atoi(binding.HostPort)
+				route.Upstream.Port = binding.HostPort
 				break
 			}
 		}
 
-		// If we are not running on Swarm we can use local networking address
-		if container.Node == nil {
-			// Try to use address when connected to local bridge
-			if route.Upstream.IP == "" {
-				route.Upstream.IP = container.NetworkSettings.IPAddress
-			}
+		// Try to use address when connected to local bridge
+		if container.Node == nil && route.Upstream.IP == "" {
+			// This address make sense only when accessing locally
+			route.Upstream.IP = container.NetworkSettings.IPAddress
+		}
 
-			// Try to use address when connected to other network
-			if route.Upstream.IP == "" {
-				for _, network := range container.NetworkSettings.Networks {
-					if network.IPAddress != "" {
-						route.Upstream.IP = network.IPAddress
-						break
-					}
+		// Try to use address when connected to other network
+		if container.Node == nil && route.Upstream.IP == "" {
+			for _, network := range container.NetworkSettings.Networks {
+				if network.IPAddress != "" {
+					route.Upstream.IP = network.IPAddress
+					break
 				}
 			}
+		}
+
+		if route.Upstream.IP == "" {
+			logrus.WithField("name", container.Name).WithField("id", container.ID[0:7]).
+				Debugln("Couldn't find an IP to access container...")
+			continue
 		}
 
 		if !route.isValid() {
 			continue
 		}
 
-		logrus.WithField("name", container.Name).WithField("id", container.ID[0:7]).WithField("route", route).Debugln("Adding route...")
+		logrus.WithField("name", container.Name).WithField("id", container.ID[0:7]).WithField("route", route).
+			Debugln("Adding route...")
 		routes.Add(route)
 	}
 

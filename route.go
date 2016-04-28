@@ -10,16 +10,16 @@ import (
 type Upstream struct {
 	Container string
 	IP        string
-	Port      int
+	Port      string
 	Proto     string
 }
 
 func (u *Upstream) Host() string {
-	return fmt.Sprintf("%s:%d", u.IP, u.Port)
+	return fmt.Sprintf("%s:%s", u.IP, u.Port)
 }
 
 func (u *Upstream) String() string {
-	return fmt.Sprintf("%s (%s:%d)", u.Container, u.IP, u.Port)
+	return fmt.Sprintf("%s (%s:%s)", u.Container, u.IP, u.Port)
 }
 
 type RouteBuilder struct {
@@ -40,10 +40,10 @@ func NewRouteBuilder() RouteBuilder {
 }
 
 func (r *RouteBuilder) isValid() bool {
-	return len(r.VirtualHost) > 0 && r.Upstream.IP != "" && r.Upstream.Port != 0
+	return len(r.VirtualHost) > 0 && r.Upstream.IP != "" && r.Upstream.Port != ""
 }
 
-func (r *RouteBuilder) parse(env string) bool {
+func (r *RouteBuilder) Parse(env string) bool {
 	keyValue := strings.SplitN(env, "=", 2)
 	if len(keyValue) != 2 {
 		return false
@@ -53,8 +53,7 @@ func (r *RouteBuilder) parse(env string) bool {
 	case "VIRTUAL_HOST":
 		r.VirtualHost = strings.Split(keyValue[1], ",")
 	case "VIRTUAL_PORT":
-		port, _ := strconv.Atoi(keyValue[1])
-		r.Upstream.Port = port
+		r.Upstream.Port = keyValue[1]
 	case "VIRTUAL_PROTO":
 		r.Upstream.Proto = keyValue[1]
 	case "ENABLE_HTTP":
@@ -67,6 +66,12 @@ func (r *RouteBuilder) parse(env string) bool {
 	}
 
 	return true
+}
+
+func (r *RouteBuilder) ParseAll(envs ...string) {
+	for _, env := range envs {
+		r.Parse(env)
+	}
 }
 
 type Route struct {
