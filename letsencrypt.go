@@ -38,7 +38,7 @@ func (e *LetsEncrypt) createAccountKey() error {
 	}
 
 	// Create a private key for your account and register
-	key, err := rsa.GenerateKey(rand.Reader, 4096)
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return err
 	}
