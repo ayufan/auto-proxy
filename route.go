@@ -27,20 +27,44 @@ type RouteBuilder struct {
 	Upstream    Upstream
 	EnableHTTP  bool
 	HSTS        string
+	Suffix      string
 }
 
-func NewRouteBuilder() RouteBuilder {
+func FindRoutes(envs ...string) (routes []RouteBuilder) {
+	for i := 0; i < 10; i++ {
+		suffix := ""
+		if i > 0 {
+			suffix = "_" + strconv.Itoa(i)
+		}
+
+		route := NewRouteBuilder(suffix)
+		route.ParseAll(envs...)
+
+		if route.haveVirtualHosts() {
+			routes = append(routes, route)
+		}
+	}
+
+	return
+}
+
+func NewRouteBuilder(suffix string) RouteBuilder {
 	return RouteBuilder{
 		Upstream: Upstream{
 			Proto: "http",
 		},
 		EnableHTTP: false,
 		HSTS:       "max-age=31536000",
+		Suffix:     suffix,
 	}
 }
 
 func (r *RouteBuilder) isValid() bool {
-	return len(r.VirtualHost) > 0 && r.Upstream.IP != "" && r.Upstream.Port != ""
+	return r.haveVirtualHosts() && r.Upstream.IP != "" && r.Upstream.Port != ""
+}
+
+func (r *RouteBuilder) haveVirtualHosts() bool {
+	return len(r.VirtualHost) > 0
 }
 
 func (r *RouteBuilder) Parse(env string) bool {
@@ -50,16 +74,16 @@ func (r *RouteBuilder) Parse(env string) bool {
 	}
 
 	switch keyValue[0] {
-	case "VIRTUAL_HOST":
+	case "VIRTUAL_HOST" + r.Suffix:
 		r.VirtualHost = strings.Split(keyValue[1], ",")
-	case "VIRTUAL_PORT":
+	case "VIRTUAL_PORT" + r.Suffix:
 		r.Upstream.Port = keyValue[1]
-	case "VIRTUAL_PROTO":
+	case "VIRTUAL_PROTO" + r.Suffix:
 		r.Upstream.Proto = keyValue[1]
-	case "ENABLE_HTTP":
+	case "ENABLE_HTTP" + r.Suffix:
 		flag, _ := strconv.ParseBool(keyValue[1])
 		r.EnableHTTP = flag
-	case "HTTP_HSTS":
+	case "HTTP_HSTS" + r.Suffix:
 		r.HSTS = keyValue[1]
 	default:
 		return false
