@@ -7,10 +7,9 @@ ENV GOROOT=/usr/lib/go \
     GOBIN=/go/bin \
     PATH=$PATH:$GOROOT/bin:$GOPATH/bin
 
-RUN echo "http://dl-4.alpinelinux.org/alpine/edge/community" >> /etc/apk/repositories && \
-  apk add -U git ca-certificates go && \
+RUN apk add -U git ca-certificates go build-base && \
   go get -v auto-proxy && \
-  apk del git go && \
+  apk del git go build-base && \
   rm -rf /go/src /go/pkg /var/cache/apk/
 
 VOLUME ["/etc/auto-proxy"]
