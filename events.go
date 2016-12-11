@@ -67,7 +67,7 @@ func createRoute(container *docker.Container, route RouteBuilder, routes Routes)
 			Debugln("Couldn't find an IP to access container...")
 	}
 
-	route.Upstream.Running = container.State.Running
+	route.Application = container.Config.Labels["com.docker.compose.project"]
 
 	if !route.isValid() {
 		return

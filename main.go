@@ -167,6 +167,9 @@ func (a *theApp) ServeHTTP(ww http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// TODO:
+	// We should lock it for time of the request
+	// Otherwise the app may go to sleep if request is too-long
 	a.markRoute(route)
 	defer a.markRoute(route)
 
@@ -235,16 +238,20 @@ func (a *theApp) RemoveHttpUri(uriPath string) {
 }
 
 func (a *theApp) markRoute(route *Route) {
+	if route.Application == "" {
+		return
+	}
+
 	a.lock.Lock()
 	defer a.lock.Unlock()
 	if a.accessed == nil {
 		a.accessed = make(map[string]time.Time)
 	}
-	a.accessed[route.VirtualHost] = time.Now()
+	a.accessed[route.Application] = time.Now()
 }
 
 func (a *theApp) shouldRouteSleep(route *Route) bool {
-	if route.AutoSleep == 0 {
+	if !route.CanSleep() {
 		return false
 	}
 
@@ -254,7 +261,7 @@ func (a *theApp) shouldRouteSleep(route *Route) bool {
 	logrus.Debugln("Checking auto-sleep for", route.VirtualHost,
 		"last accessed", a.accessed[route.VirtualHost],
 		"with auto-sleep", route.AutoSleep)
-	return time.Since(a.accessed[route.VirtualHost]) > route.AutoSleep
+	return time.Since(a.accessed[route.Application]) > route.AutoSleep
 }
 
 func (a *theApp) sleepUpdate() {

@@ -17,11 +17,10 @@ type Upstream struct {
 	IP        string
 	Port      string
 	Proto     string
-	Running   bool
 }
 
 func (u *Upstream) IsValid() bool {
-	return u.IP != "" && u.Port != "" && u.Running
+	return u.IP != "" && u.Port != ""
 }
 
 func (u *Upstream) Host() string {
@@ -39,6 +38,9 @@ type RouteBuilder struct {
 	HSTS        string
 	Suffix      string
 	AutoSleep   time.Duration
+
+	Application string
+	Containers  []string
 }
 
 func FindRoutes(envs ...string) (routes []RouteBuilder) {
@@ -128,6 +130,11 @@ type Route struct {
 	AutoSleep   time.Duration
 	Containers  []string
 	Servers     []Upstream
+	Application string
+}
+
+func (r *Route) CanSleep() bool {
+	return r.AutoSleep != 0 && r.Application != ""
 }
 
 func (r *Route) Start(client *docker.Client, wg *sync.WaitGroup) {
@@ -161,6 +168,13 @@ func (r *Routes) Add(b RouteBuilder) bool {
 
 	for _, host := range b.VirtualHost {
 		route := r.GetVhost(host)
+		if route.Application == "" {
+			route.Application = b.Application
+		} else if route.Application != b.Application {
+			logrus.Warningln("Cannot add route to different application", b.Application)
+			continue
+		}
+
 		if b.Upstream.IsValid() {
 			route.Servers = append(route.Servers, b.Upstream)
 		}
