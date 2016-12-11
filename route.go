@@ -147,7 +147,7 @@ func (r *Route) Stop(client *docker.Client, wg *sync.WaitGroup) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			client.StopContainer(container, 30)
+			client.StopContainer(container, uint(*stopTimeout/time.Second))
 		}()
 	}
 }

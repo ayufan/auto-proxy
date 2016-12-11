@@ -28,6 +28,10 @@ var useDefaultKey = flag.Bool("use-default-key", true, "All certificates will be
 var ports = flag.String("ports", "80,8080,3000,5000", "Auto-create mapping for these ports")
 var insecureSkipVerify = flag.Bool("insecure-skip-verify", false, "Disable SSL/TLS checking for proxied requests")
 var http2proto = flag.Bool("http2", true, "Enable HTTP2 support")
+var sleepCheckInterval = flag.Duration("sleep-check-interval", time.Minute, "How often to check the application state")
+var certificateCheckInterval = flag.Duration("ceritifcate-check-interval", time.Hour, "How often to refresh certificates")
+var startTimeout = flag.Duration("start-timeout", 30*time.Second, "How long to wait for application boot")
+var stopTimeout = flag.Duration("stop-timeout", 30*time.Second, "How long to wait for application to shutdown")
 var verbose = flag.Bool("debug", false, "Be more verbose")
 
 type theApp struct {
@@ -80,7 +84,9 @@ func (a *theApp) waitForRoute(route *Route) (newRoute *Route) {
 		return nil
 	}
 
-	for i := 0; i < 30; i++ {
+	started := time.Now()
+
+	for time.Since(started) < *startTimeout {
 		newRoute = a.routes.Find(route.VirtualHost)
 		if newRoute == nil {
 			return
@@ -269,7 +275,9 @@ func main() {
 			Timeout:   30 * time.Second,
 			KeepAlive: 30 * time.Second,
 		}).Dial,
-		TLSHandshakeTimeout: 10 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 30 * time.Second,
+		ExpectContinueTimeout: 30 * time.Second,
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: *insecureSkipVerify,
 		},
@@ -329,7 +337,7 @@ func main() {
 	// Renew certificates
 	go func() {
 		for {
-			time.Sleep(time.Hour)
+			time.Sleep(*certificateCheckInterval)
 			app.certificates.Tick(&app)
 		}
 	}()
@@ -337,7 +345,7 @@ func main() {
 	// Sleep support
 	go func() {
 		for {
-			time.Sleep(time.Second * 10)
+			time.Sleep(*sleepCheckInterval)
 			app.sleepUpdate()
 		}
 	}()
