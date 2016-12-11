@@ -32,6 +32,7 @@ func createRoute(container *docker.Container, route RouteBuilder, routes Routes)
 	}
 
 	route.Upstream.Container = container.Name
+	route.Upstream.ID = container.ID
 
 	// Try to find bindings for specified ports
 	portDef := fmt.Sprintf("%s/tcp", route.Upstream.Port)

@@ -224,6 +224,10 @@ func (a *theApp) shouldRouteSleep(route *Route) bool {
 
 	a.lock.Lock()
 	defer a.lock.Unlock()
+
+	logrus.Debugln("Checking auto-sleep for", route.VirtualHost,
+		"last accessed", a.accessed[route.VirtualHost],
+		"with auto-sleep", route.AutoSleep)
 	return time.Since(a.accessed[route.VirtualHost]) > route.AutoSleep
 }
 
@@ -234,7 +238,8 @@ func (a *theApp) sleepUpdate() {
 
 	for _, route := range routes {
 		if a.shouldRouteSleep(route) && len(route.Servers) != 0 {
-			logrus.Infoln("Stopping containers for", route.VirtualHost, "due to inactivity:", route.Containers)
+			logrus.Infoln("Stopping containers for", route.VirtualHost,
+				"due to inactivity:", route.Containers)
 			route.Stop(a.client, &wg)
 		}
 	}

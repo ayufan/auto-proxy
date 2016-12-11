@@ -2,17 +2,18 @@ package main
 
 import (
 	"fmt"
+	"github.com/Sirupsen/logrus"
 	"github.com/fsouza/go-dockerclient"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"github.com/Sirupsen/logrus"
 )
 
 type Upstream struct {
 	Container string
+	ID        string
 	IP        string
 	Port      string
 	Proto     string
@@ -163,7 +164,7 @@ func (r *Routes) Add(b RouteBuilder) bool {
 		if b.Upstream.IsValid() {
 			route.Servers = append(route.Servers, b.Upstream)
 		}
-		route.Containers = append(route.Containers, b.Upstream.Container)
+		route.Containers = append(route.Containers, b.Upstream.ID)
 		route.EnableHTTP = b.EnableHTTP
 		route.HSTS = b.HSTS
 		route.AutoSleep = b.AutoSleep
