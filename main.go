@@ -236,7 +236,7 @@ func (a *theApp) sleepUpdate() {
 		}
 	}
 
-	wg.Done()
+	wg.Wait()
 }
 
 func main() {
