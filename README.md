@@ -64,6 +64,11 @@ The port 80 is always exposed to 443 unless the `ENABLE_HTTP=true` is specified 
 Till the certificate is generated the `default.crt` will be used to serve the site.
 The `default.crt` is generated on first run of auto-proxy and can be overwritten later.
 
+#### Auto-sleep
+
+Auto-proxy allows you to configure containers to auto-sleep after in-activity time by specifying `AUTO_SLEEP` variable in `time.Duration` format.
+For example: `AUTO_SLEEP=30s` or `AUTO_SLEEP=30m`.
+
 ### Contributing
 
 Before submitting pull requests or issues, please check github to make sure an existing issue or pull request is not already open.

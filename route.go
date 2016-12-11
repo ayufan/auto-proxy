@@ -2,9 +2,12 @@ package main
 
 import (
 	"fmt"
+	"github.com/fsouza/go-dockerclient"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
 
 type Upstream struct {
@@ -12,6 +15,11 @@ type Upstream struct {
 	IP        string
 	Port      string
 	Proto     string
+	Running   bool
+}
+
+func (u *Upstream) IsValid() bool {
+	return u.IP != "" && u.Port != "" && u.Running
 }
 
 func (u *Upstream) Host() string {
@@ -28,6 +36,7 @@ type RouteBuilder struct {
 	EnableHTTP  bool
 	HSTS        string
 	Suffix      string
+	AutoSleep   time.Duration
 }
 
 func FindRoutes(envs ...string) (routes []RouteBuilder) {
@@ -60,7 +69,7 @@ func NewRouteBuilder(suffix string) RouteBuilder {
 }
 
 func (r *RouteBuilder) isValid() bool {
-	return r.haveVirtualHosts() && r.Upstream.IP != "" && r.Upstream.Port != ""
+	return r.haveVirtualHosts()
 }
 
 func (r *RouteBuilder) haveVirtualHosts() bool {
@@ -85,6 +94,12 @@ func (r *RouteBuilder) Parse(env string) bool {
 		r.EnableHTTP = flag
 	case "HTTP_HSTS" + r.Suffix:
 		r.HSTS = keyValue[1]
+	case "AUTO_SLEEP" + r.Suffix:
+		r.AutoSleep, _ = time.ParseDuration(keyValue[1])
+	case "AUTO_SLEEP":
+		if r.AutoSleep == 0 {
+			r.AutoSleep, _ = time.ParseDuration(keyValue[1])
+		}
 	default:
 		return false
 	}
@@ -103,7 +118,31 @@ type Route struct {
 	Wildcard    bool
 	EnableHTTP  bool
 	HSTS        string
+	AutoSleep   time.Duration
+	Containers  []string
 	Servers     []Upstream
+}
+
+func (r *Route) Start(client *docker.Client, wg *sync.WaitGroup) {
+	// Try to start all containers
+	for _, container := range r.Containers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			client.StartContainer(container, nil)
+		}()
+	}
+}
+
+func (r *Route) Stop(client *docker.Client, wg *sync.WaitGroup) {
+	// Try to start all containers
+	for _, container := range r.Containers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			client.StopContainer(container, 30)
+		}()
+	}
 }
 
 type Routes map[string]*Route
@@ -115,9 +154,13 @@ func (r *Routes) Add(b RouteBuilder) bool {
 
 	for _, host := range b.VirtualHost {
 		route := r.GetVhost(host)
-		route.Servers = append(route.Servers, b.Upstream)
+		if b.Upstream.IsValid() {
+			route.Servers = append(route.Servers, b.Upstream)
+		}
+		route.Containers = append(route.Containers, b.Upstream.Container)
 		route.EnableHTTP = b.EnableHTTP
 		route.HSTS = b.HSTS
+		route.AutoSleep = b.AutoSleep
 	}
 	return true
 }

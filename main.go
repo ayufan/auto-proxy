@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"github.com/Sirupsen/logrus"
+	"github.com/fsouza/go-dockerclient"
 	"io"
 	"math/rand"
 	"net"
@@ -33,7 +34,9 @@ type theApp struct {
 	routes       Routes
 	certificates Certificates
 	wellKnown    map[string]string
+	accessed     map[string]time.Time
 	lock         sync.RWMutex
+	client       *docker.Client
 }
 
 func (a *theApp) update(routes Routes) {
@@ -72,6 +75,34 @@ func (a *theApp) serveWellKnown(w http.ResponseWriter, r *http.Request) bool {
 	return false
 }
 
+func (a *theApp) waitForRoute(route *Route) (newRoute *Route) {
+	if route.AutoSleep == 0 {
+		return nil
+	}
+
+	for i := 0; i < 30; i++ {
+		newRoute = a.routes.Find(route.VirtualHost)
+		if newRoute == nil {
+			return
+		}
+
+		// We did start the route
+		if len(newRoute.Servers) != 0 {
+			return
+		}
+
+		// Start all containers
+		var wg sync.WaitGroup
+		newRoute.Start(a.client, &wg)
+		wg.Wait()
+
+		// Wait for containers to came-up
+		time.Sleep(time.Second)
+	}
+
+	return nil
+}
+
 func (a *theApp) ServeHTTP(ww http.ResponseWriter, r *http.Request) {
 	w := newLoggingResponseWriter(ww)
 	defer w.Log(r)
@@ -101,14 +132,15 @@ func (a *theApp) ServeHTTP(ww http.ResponseWriter, r *http.Request) {
 
 	// Check if we have servers that we can use
 	if len(route.Servers) == 0 {
-		httpServerError(w, r, "no upstreams for", r.Host)
-		return
+		route = a.waitForRoute(route)
+		if route == nil {
+			httpServerError(w, r, "no upstreams for", r.Host)
+			return
+		}
 	}
 
-	// Add HSTS header
-	if r.TLS != nil && !route.EnableHTTP && route.HSTS != "" {
-		w.Header().Set("Strict-Transport-Security", route.HSTS)
-	}
+	a.markRoute(route)
+	defer a.markRoute(route)
 
 	// Update URL
 	upstream := route.Servers[rand.Int()%len(route.Servers)]
@@ -117,7 +149,13 @@ func (a *theApp) ServeHTTP(ww http.ResponseWriter, r *http.Request) {
 	} else {
 		r.URL.Scheme = "http"
 	}
+
 	r.URL.Host = upstream.Host()
+
+	// Add HSTS header
+	if r.TLS != nil && !route.EnableHTTP && route.HSTS != "" {
+		w.Header().Set("Strict-Transport-Security", route.HSTS)
+	}
 
 	// Pass X-Forwarded information to client
 	if clientIP, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
@@ -168,6 +206,39 @@ func (a *theApp) RemoveHttpUri(uriPath string) {
 	}
 }
 
+func (a *theApp) markRoute(route *Route) {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+	if a.accessed == nil {
+		a.accessed = make(map[string]time.Time)
+	}
+	a.accessed[route.VirtualHost] = time.Now()
+}
+
+func (a *theApp) shouldRouteSleep(route *Route) bool {
+	if route.AutoSleep == 0 {
+		return false
+	}
+
+	a.lock.Lock()
+	defer a.lock.Unlock()
+	return time.Since(a.accessed[route.VirtualHost]) > route.AutoSleep
+}
+
+func (a *theApp) sleepUpdate() {
+	var wg sync.WaitGroup
+
+	routes := a.routes
+
+	for _, route := range routes {
+		if a.shouldRouteSleep(route) {
+			route.Stop(a.client, &wg)
+		}
+	}
+
+	wg.Done()
+}
+
 func main() {
 	var wg sync.WaitGroup
 	var app theApp
@@ -212,6 +283,12 @@ func main() {
 		logrus.Fatalln(err)
 	}
 
+	app.client, err = docker.NewClientFromEnv()
+	if err != nil {
+		logrus.Errorln("Unable to connect to docker daemon:", err)
+		os.Exit(1)
+	}
+
 	// Listen for HTTP
 	if *listenHttp != "" {
 		wg.Add(1)
@@ -238,7 +315,7 @@ func main() {
 
 	// Watch for docker events to generate routes
 	go func() {
-		watchEvents(app.update)
+		app.watchEvents()
 	}()
 
 	// Renew certificates
@@ -246,6 +323,14 @@ func main() {
 		for {
 			time.Sleep(time.Hour)
 			app.certificates.Tick(&app)
+		}
+	}()
+
+	// Sleep support
+	go func() {
+		for {
+			time.Sleep(time.Minute)
+			app.sleepUpdate()
 		}
 	}()
 
