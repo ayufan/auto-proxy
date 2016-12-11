@@ -91,7 +91,7 @@ func (a *theApp) waitForRoute(route *Route) (newRoute *Route) {
 			return
 		}
 
-		logrus.Debugln("Starting containers for", route.VirtualHost, ":", route.Containers)
+		logrus.Infoln("Starting containers for", route.VirtualHost, ":", route.Containers)
 
 		// Start all containers
 		var wg sync.WaitGroup
@@ -234,7 +234,7 @@ func (a *theApp) sleepUpdate() {
 
 	for _, route := range routes {
 		if a.shouldRouteSleep(route) && len(route.Servers) != 0 {
-			logrus.Debugln("Stopping containers for", route.VirtualHost, "due to inactivity:", route.Containers)
+			logrus.Infoln("Stopping containers for", route.VirtualHost, "due to inactivity:", route.Containers)
 			route.Stop(a.client, &wg)
 		}
 	}
@@ -332,7 +332,7 @@ func main() {
 	// Sleep support
 	go func() {
 		for {
-			time.Sleep(time.Minute)
+			time.Sleep(time.Second * 10)
 			app.sleepUpdate()
 		}
 	}()

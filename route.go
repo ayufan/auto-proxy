@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"github.com/Sirupsen/logrus"
 )
 
 type Upstream struct {
@@ -77,6 +78,8 @@ func (r *RouteBuilder) haveVirtualHosts() bool {
 }
 
 func (r *RouteBuilder) Parse(env string) bool {
+	var err error
+
 	keyValue := strings.SplitN(env, "=", 2)
 	if len(keyValue) != 2 {
 		return false
@@ -95,13 +98,16 @@ func (r *RouteBuilder) Parse(env string) bool {
 	case "HTTP_HSTS" + r.Suffix:
 		r.HSTS = keyValue[1]
 	case "AUTO_SLEEP" + r.Suffix:
-		r.AutoSleep, _ = time.ParseDuration(keyValue[1])
+		r.AutoSleep, err = time.ParseDuration(keyValue[1])
 	case "AUTO_SLEEP":
 		if r.AutoSleep == 0 {
 			r.AutoSleep, _ = time.ParseDuration(keyValue[1])
 		}
 	default:
 		return false
+	}
+	if err != nil {
+		logrus.Warningln("Failed to parse", keyValue, "due:", err)
 	}
 
 	return true
