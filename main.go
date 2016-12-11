@@ -78,7 +78,7 @@ func (a *theApp) ServeTLS(ch *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	// Wait for certificate provisioning
 	for time.Since(started) < *certificateRequestTimeout {
 		// Try to find that certificate
-		if tls, requesting := a.certificates.Find(serverName); tls != nil || !requesting {
+		if tls, requesting := a.certificates.Find(serverName); !requesting {
 			return tls, nil
 		}
 
