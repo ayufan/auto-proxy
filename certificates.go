@@ -24,13 +24,13 @@ func (c *Certificates) remove(name string) {
 	delete(c.list, name)
 }
 
-func (c *Certificates) load(name string, challenge CertificateChallenge) (tls *tls.Certificate, err error) {
+func (c *Certificates) load(name string, challenge CertificateChallenge) (tls *tls.Certificate, requesting bool, err error) {
 	logrus.WithField("name", name).Debugln("Loading certificate...")
 
 	// Just in case if certificate was added by other entity
-	tls = c.find(name)
+	tls, requesting = c.find(name)
 	if tls != nil {
-		return tls, nil
+		return tls, requesting, nil
 	}
 
 	// Create a new certificate
@@ -64,6 +64,7 @@ func (c *Certificates) load(name string, challenge CertificateChallenge) (tls *t
 		return
 	}
 
+	requesting = true
 	certificate.Requesting = true
 	go func() {
 		err := certificate.Request(challenge)
@@ -76,14 +77,14 @@ func (c *Certificates) load(name string, challenge CertificateChallenge) (tls *t
 	return
 }
 
-func (c Certificates) find(serverName string) *tls.Certificate {
+func (c Certificates) find(serverName string) (*tls.Certificate, bool) {
 	if certificate, ok := c.list[serverName]; ok && certificate != nil {
 		if certificate.Requesting && certificate.TLS == nil {
-			return nil
+			return nil, certificate.Requesting
 		}
-		return certificate.TLS
+		return certificate.TLS, certificate.Requesting
 	}
-	return nil
+	return nil, false
 }
 
 func (c Certificates) tick(challenge CertificateChallenge) {
@@ -116,13 +117,13 @@ func (c *Certificates) Remove(name string) {
 	c.remove(name)
 }
 
-func (c *Certificates) Load(name string, challenge CertificateChallenge) (*tls.Certificate, error) {
+func (c *Certificates) Load(name string, challenge CertificateChallenge) (*tls.Certificate, bool, error) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	return c.load(name, challenge)
 }
 
-func (c Certificates) Find(serverName string) *tls.Certificate {
+func (c Certificates) Find(serverName string) (*tls.Certificate, bool) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.find(serverName)

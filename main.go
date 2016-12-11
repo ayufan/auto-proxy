@@ -30,6 +30,7 @@ var insecureSkipVerify = flag.Bool("insecure-skip-verify", false, "Disable SSL/T
 var http2proto = flag.Bool("http2", true, "Enable HTTP2 support")
 var sleepCheckInterval = flag.Duration("sleep-check-interval", time.Minute, "How often to check the application state")
 var certificateCheckInterval = flag.Duration("ceritifcate-check-interval", time.Hour, "How often to refresh certificates")
+var certificateRequestTimeout = flag.Duration("certificate-request-timeout", 30*time.Second, "How long to wait for certificate request")
 var startTimeout = flag.Duration("start-timeout", 30*time.Second, "How long to wait for application boot")
 var stopTimeout = flag.Duration("stop-timeout", 30*time.Second, "How long to wait for application to shutdown")
 var verbose = flag.Bool("debug", false, "Be more verbose")
@@ -56,16 +57,35 @@ func (a *theApp) ServeTLS(ch *tls.ClientHelloInfo) (*tls.Certificate, error) {
 	serverName := ch.ServerName
 
 	// Try to find that certificate
-	tls := a.certificates.Find(serverName)
-	if tls == nil {
-		// Check if we should request that certificate
-		route := a.routes.Find(serverName)
-		if route != nil {
-			tls, _ = a.certificates.Load(serverName, a)
-		}
+	if tls, _ := a.certificates.Find(serverName); tls != nil {
+		return tls, nil
 	}
 
-	return tls, nil
+	// Check if we should request that certificate
+	route := a.routes.Find(serverName)
+	if route == nil {
+		return nil, nil
+	}
+
+	// Try to load certificate, or request
+	tls, requesting, err := a.certificates.Load(serverName, a)
+	if tls != nil || err != nil || !requesting {
+		return tls, nil
+	}
+
+	started := time.Now()
+
+	// Wait for certificate provisioning
+	for time.Since(started) < *certificateRequestTimeout {
+		// Try to find that certificate
+		if tls, requesting := a.certificates.Find(serverName); tls != nil || !requesting {
+			return tls, nil
+		}
+
+		time.Sleep(time.Second)
+	}
+
+	return nil, nil
 }
 
 func (a *theApp) serveWellKnown(w http.ResponseWriter, r *http.Request) bool {

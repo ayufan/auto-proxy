@@ -28,7 +28,6 @@ func createRoute(container *docker.Container, route RouteBuilder, routes Routes)
 	if route.Upstream.Port == "" {
 		logrus.WithField("name", container.Name).WithField("id", container.ID[0:7]).
 			Debugln("Couldn't find a port to expose...")
-		return
 	}
 
 	route.Upstream.Container = container.Name
@@ -63,15 +62,15 @@ func createRoute(container *docker.Container, route RouteBuilder, routes Routes)
 		}
 	}
 
+	if route.Upstream.IP == "" {
+		logrus.WithField("name", container.Name).WithField("id", container.ID[0:7]).
+			Debugln("Couldn't find an IP to access container...")
+	}
+
 	route.Upstream.Running = container.State.Running
 
 	if !route.isValid() {
 		return
-	}
-
-	if route.Upstream.IP == "" {
-		logrus.WithField("name", container.Name).WithField("id", container.ID[0:7]).
-			Debugln("Couldn't find an IP to access container...")
 	}
 
 	logrus.WithField("name", container.Name).WithField("id", container.ID[0:7]).WithField("route", route).
