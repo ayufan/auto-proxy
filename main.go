@@ -3,17 +3,21 @@ package main
 import (
 	"crypto/tls"
 	"flag"
-	"github.com/Sirupsen/logrus"
-	"github.com/fsouza/go-dockerclient"
 	"io"
 	"math/rand"
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"os"
 	"path"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/fsouza/go-dockerclient"
+	"github.com/koding/websocketproxy"
 )
 
 var listenHttp = flag.String("listen-http", ":80", "The address to listen for HTTP requests")
@@ -131,6 +135,11 @@ func (a *theApp) waitForRoute(route *Route) (newRoute *Route) {
 	return nil
 }
 
+func isWebSocketUpgrade(r *http.Request) bool {
+	return strings.ToLower(r.Header.Get("Upgrade")) == "websocket" &&
+		strings.ToLower(r.Header.Get("Connection")) == "upgrade"
+}
+
 func (a *theApp) ServeHTTP(ww http.ResponseWriter, r *http.Request) {
 	w := newLoggingResponseWriter(ww)
 	defer w.Log(r)
@@ -199,12 +208,21 @@ func (a *theApp) ServeHTTP(ww http.ResponseWriter, r *http.Request) {
 		r.Header.Set("X-Forwarded-Proto", "https")
 	}
 
-	proxy := httputil.ReverseProxy{
-		Director:      func(_ *http.Request) {},
-		Transport:     &defaultTransport,
-		FlushInterval: time.Minute,
+	if isWebSocketUpgrade(r) {
+		proxy := websocketproxy.WebsocketProxy{
+			Backend: func(r *http.Request) *url.URL {
+				return r.URL
+			},
+		}
+		proxy.ServeHTTP(w, r)
+	} else {
+		proxy := httputil.ReverseProxy{
+			Director:      func(_ *http.Request) {},
+			Transport:     &defaultTransport,
+			FlushInterval: time.Minute,
+		}
+		proxy.ServeHTTP(w, r)
 	}
-	proxy.ServeHTTP(w, r)
 
 	w.Message = upstream.String()
 }
