@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/Sirupsen/logrus"
-	"github.com/fsouza/go-dockerclient"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/Sirupsen/logrus"
+	"github.com/fsouza/go-dockerclient"
 )
 
 type Upstream struct {
@@ -35,6 +36,7 @@ type RouteBuilder struct {
 	VirtualHost []string
 	Upstream    Upstream
 	EnableHTTP  bool
+	EnableWS    bool
 	HSTS        string
 	Suffix      string
 	AutoSleep   time.Duration
@@ -98,6 +100,9 @@ func (r *RouteBuilder) Parse(env string) bool {
 	case "ENABLE_HTTP" + r.Suffix:
 		flag, _ := strconv.ParseBool(keyValue[1])
 		r.EnableHTTP = flag
+	case "ENABLE_WS" + r.Suffix:
+		flag, _ := strconv.ParseBool(keyValue[1])
+		r.EnableWS = flag
 	case "HTTP_HSTS" + r.Suffix:
 		r.HSTS = keyValue[1]
 	case "AUTO_SLEEP" + r.Suffix:
@@ -126,6 +131,7 @@ type Route struct {
 	VirtualHost string
 	Wildcard    bool
 	EnableHTTP  bool
+	EnableWS    bool
 	HSTS        string
 	AutoSleep   time.Duration
 	Containers  []string
@@ -180,6 +186,7 @@ func (r *Routes) Add(b RouteBuilder) bool {
 		}
 		route.Containers = append(route.Containers, b.Upstream.ID)
 		route.EnableHTTP = b.EnableHTTP
+		route.EnableWS = b.EnableWS
 		route.HSTS = b.HSTS
 		route.AutoSleep = b.AutoSleep
 	}

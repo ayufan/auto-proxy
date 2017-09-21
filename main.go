@@ -209,6 +209,10 @@ func (a *theApp) ServeHTTP(ww http.ResponseWriter, r *http.Request) {
 	}
 
 	if isWebSocketUpgrade(r) {
+		if !route.EnableWS {
+			httpServerError(w, r, "websockets not enabled", r.Host)
+			return
+		}
 		proxy := websocketproxy.WebsocketProxy{
 			Backend: func(r *http.Request) *url.URL {
 				return r.URL
