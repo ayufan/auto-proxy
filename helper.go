@@ -15,6 +15,10 @@ var hopHeaders = []string{
 	"Trailer", // not Trailers per URL above; http://www.rfc-editor.org/errata_search.php?eid=4522
 	"Transfer-Encoding",
 	"Upgrade",
+	"Sec-Websocket-Key",
+	"Sec-WebSocket-Protocol",
+	"Cookie",
+	"Origin",
 }
 
 func copyHeader(dst, src http.Header) {
