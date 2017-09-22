@@ -141,8 +141,8 @@ func isWebSocketUpgrade(r *http.Request) bool {
 }
 
 func (a *theApp) ServeHTTP(ww http.ResponseWriter, r *http.Request) {
-	w := newLoggingResponseWriter(ww)
-	defer w.Log(r)
+	w := newLoggingResponseWriter(ww, r)
+	defer w.Log()
 
 	// Serve ACME responses
 	if a.serveWellKnown(w, r) {
