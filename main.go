@@ -221,7 +221,7 @@ func (a *theApp) ServeHTTP(ww http.ResponseWriter, r *http.Request) {
 			Director: func(incoming *http.Request, out http.Header) {
 				tmp := http.Header{}
 				copyHeader(tmp, incoming.Header)
-				removeHeaders(tmp, hopHeaders)
+				removeHeaders(tmp, wsHopHeaders)
 				copyHeader(out, tmp)
 			},
 		}

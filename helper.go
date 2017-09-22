@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-var hopHeaders = []string{
+var wsHopHeaders = []string{
 	"Connection",
 	"Proxy-Connection", // non-standard but still sent by libcurl and rejected by e.g. google
 	"Keep-Alive",
@@ -17,6 +17,8 @@ var hopHeaders = []string{
 	"Upgrade",
 	"Sec-Websocket-Key",
 	"Sec-WebSocket-Protocol",
+	"Sec-Websocket-Version",
+	"Sec-Websocket-Extensions",
 	"Cookie",
 	"Origin",
 }
