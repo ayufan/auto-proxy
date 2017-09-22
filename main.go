@@ -213,9 +213,16 @@ func (a *theApp) ServeHTTP(ww http.ResponseWriter, r *http.Request) {
 			httpServerError(w, r, "websockets not enabled", r.Host)
 			return
 		}
+
 		proxy := websocketproxy.WebsocketProxy{
 			Backend: func(r *http.Request) *url.URL {
-				return r.URL
+				url := *r.URL
+				if url.Scheme == "http" {
+					url.Scheme = "ws"
+				} else if url.Scheme == "https" {
+					url.Scheme = "wss"
+				}
+				return &url
 			},
 		}
 		proxy.ServeHTTP(w, r)
@@ -226,6 +233,10 @@ func (a *theApp) ServeHTTP(ww http.ResponseWriter, r *http.Request) {
 			FlushInterval: time.Minute,
 		}
 		proxy.ServeHTTP(w, r)
+	}
+
+	if !w.IsFinished() {
+		httpServerError(w, r, "failed to proxy connection")
 	}
 
 	w.Message = upstream.String()

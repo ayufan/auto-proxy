@@ -43,6 +43,10 @@ func (l *loggingResponseWriter) WriteHeader(status int) {
 	}
 }
 
+func (l *loggingResponseWriter) IsFinished() bool {
+	return l.status != 0
+}
+
 func (l *loggingResponseWriter) Log(r *http.Request) {
 	duration := time.Since(l.started)
 	fmt.Printf("%s %s - - [%s] %q %d %d %q %q %f %q\n",
