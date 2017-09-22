@@ -11,7 +11,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"strings"
 	"sync"
 	"time"
 
@@ -135,11 +134,6 @@ func (a *theApp) waitForRoute(route *Route) (newRoute *Route) {
 	return nil
 }
 
-func isWebSocketUpgrade(r *http.Request) bool {
-	return strings.ToLower(r.Header.Get("Upgrade")) == "websocket" &&
-		strings.ToLower(r.Header.Get("Connection")) == "upgrade"
-}
-
 func (a *theApp) ServeHTTP(ww http.ResponseWriter, r *http.Request) {
 	w := newLoggingResponseWriter(ww, r)
 	defer w.Log()
@@ -223,6 +217,12 @@ func (a *theApp) ServeHTTP(ww http.ResponseWriter, r *http.Request) {
 					url.Scheme = "wss"
 				}
 				return &url
+			},
+			Director: func(incoming *http.Request, out http.Header) {
+				tmp := http.Header{}
+				copyHeader(tmp, incoming.Header)
+				removeHeaders(tmp, hopHeaders)
+				copyHeader(out, tmp)
 			},
 		}
 		proxy.ServeHTTP(w, r)
