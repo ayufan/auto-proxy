@@ -39,5 +39,5 @@ func removeHeaders(out http.Header, headers []string) {
 
 func isWebSocketUpgrade(r *http.Request) bool {
 	return strings.ToLower(r.Header.Get("Upgrade")) == "websocket" &&
-		strings.ToLower(r.Header.Get("Connection")) == "upgrade"
+	strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") == true
 }
