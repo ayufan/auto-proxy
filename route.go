@@ -208,12 +208,18 @@ func (r Routes) GetVhost(vhost string) *Route {
 func (r Routes) trimSubdomain(s string) string {
 	if idx := strings.Index(s, "."); idx >= 0 {
 		return s[idx+1:]
-	} else {
-		return s
 	}
+
+	return s
 }
 
-func (r Routes) Find(vhost string) *Route {
+func (r Routes) Find(vhostFull string) *Route {
+	vhostSplit = strings.SplitN(vhostFull, ":", 2)
+	if len(vhostSplit) == 0 {
+		return nil
+	}
+	vhost = vhostSplit[0]
+
 	if r == nil {
 		return nil
 	} else if route, ok := r[vhost]; ok {
@@ -221,10 +227,8 @@ func (r Routes) Find(vhost string) *Route {
 	} else if route, ok := r[r.trimSubdomain(vhost)]; ok && route.Wildcard {
 		if matched, _ := filepath.Match(route.VirtualHost, vhost); matched {
 			return route
-		} else {
-			return nil
 		}
-	} else {
-		return nil
 	}
+
+	return nil
 }
